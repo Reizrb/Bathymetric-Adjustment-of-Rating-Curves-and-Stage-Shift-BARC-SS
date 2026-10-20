@@ -7,7 +7,7 @@ authors:
     given-names: Reihaneh
     affiliation: "University of Alabama"
 license: MIT
-version: "1.0.0"
+version: "1.1.0"
 repository-code: "https://github.com/Reizrb/Bathymetric-Adjustment-of-Rating-Curves-and-Stage-Shift-BARC-SS"
 abstract: "Python implementation of BARC and BARC-SS, which add ML-predicted bankfull channel geometry to OWP HAND-FIM synthetic rating curves and, for BARC-SS, shift the stage datum by the mean-flow depth."
 keywords:

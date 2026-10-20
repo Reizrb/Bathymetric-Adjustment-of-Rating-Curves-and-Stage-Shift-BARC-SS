@@ -1,120 +1,80 @@
 # BARC-SS: Bathymetric Adjustment of Rating Curves and Stage Shift
 
-Python code to apply **BARC** and **BARC-SS** to the synthetic rating curves of
-[OWP HAND-FIM](https://github.com/NOAA-OWP/inundation-mapping) and map the resulting floods.
+DEMs capture the water surface, not the river bed, so the synthetic rating curves of
+[OWP HAND-FIM](https://github.com/NOAA-OWP/inundation-mapping) miss the channel below
+the water. This code adds that channel to the HAND-FIM hydrotables before the flood map
+is made:
 
-- **BARC** adds the bankfull channel area and wetted perimeter missing from the DEM to each
-  reach's hydrotable and recomputes discharge with Manning's equation.
+- **BARC** adds the bankfull channel area and wetted perimeter to the hydrotable and
+  recomputes discharge with Manning's equation.
 - **BARC-SS** does the same, then shifts each rating curve's stage up by the reach's
-  mean-flow depth and re-anchors it at zero flow.
+  mean-flow depth and anchors it at zero flow.
 
-Channel width and depth come from [HydroGeom](https://github.com/Reizrb/HydroGeom), and
-you choose the channel shape used to turn them into area and wetted perimeter.
+Channel width and depth come from [HydroGeom](https://github.com/Reizrb/HydroGeom),
+for a channel shape you choose.
 
 <p align="center"><img src="assets/fig4a_step1_initial.png" alt="Initial HAND-FIM rating curve" width="75%"><br><sub>Initial HAND-FIM: the DEM captures only the channel above the water surface.</sub></p>
-<p align="center"><img src="assets/fig4b_step2-3_barc.png" alt="BARC: missing geometry added, discharge recomputed" width="75%"><br><sub>BARC: the missing channel geometry is added and discharge recomputed.</sub></p>
-<p align="center"><img src="assets/fig4c_step4-5_barc-ss.png" alt="BARC-SS: stage shifted by mean-flow depth and anchored at zero flow" width="75%"><br><sub>BARC-SS: stage is also shifted by the mean-flow depth and anchored at zero flow.</sub></p>
+<p align="center"><img src="assets/fig4b_step2-3_barc.png" alt="BARC" width="75%"><br><sub>BARC: the missing channel geometry is added and discharge recomputed.</sub></p>
+<p align="center"><img src="assets/fig4c_step4-5_barc-ss.png" alt="BARC-SS" width="75%"><br><sub>BARC-SS: stage is also shifted by the mean-flow depth and anchored at zero flow.</sub></p>
 
-## Requirements
+## Run it with FIMserv_BARC-SS
 
-- Python 3.10 to 3.13
-- Internet access: HAND-FIM data are downloaded from the public `ciroh-owp-hand-fim` AWS
-  bucket (no account needed), NWM discharge from the NWM retrospective, and channel
-  geometry from the HydroGeom API
-- A few GB of free disk space per HUC8
-
-## Install
+[FIMserv_BARC-SS](https://github.com/Reizrb/FIMserv_BARC-SS) is a fork of
+[FIMserv](https://github.com/sdmlua/FIMserv), which downloads and runs OWP HAND-FIM for
+any HUC8, with BARC and BARC-SS added as one extra step. Everything else works the same
+as FIMserv. (A pull request to add this step to FIMserv is open.)
 
 ```bash
-pip install "barcss[example] @ git+https://github.com/Reizrb/Bathymetric-Adjustment-of-Rating-Curves-and-Stage-Shift-BARC-SS"
+pip install "git+https://github.com/Reizrb/FIMserv_BARC-SS" "git+https://github.com/Reizrb/HydroGeom"
 ```
-
-This installs `barcss`, [HydroGeomKit](https://github.com/Reizrb/HydroGeom),
-[FIMserv](https://github.com/sdmlua/FIMserv) (which runs HAND-FIM), and Jupyter.
-Without `[example]`, only `barcss` and HydroGeomKit are installed.
-
-## Reproduce the example
-
-The example applies BARC-SS to **HUC8 11110203** (Arkansas River) with a trapezoidal
-channel **a = 0.4**, and maps the flood of **3 January 2016, 00:00** using NWM
-retrospective discharge and OWP HAND-FIM version 4.5.
-
-```bash
-mkdir barcss-example && cd barcss-example
-curl -LO https://raw.githubusercontent.com/Reizrb/Bathymetric-Adjustment-of-Rating-Curves-and-Stage-Shift-BARC-SS/main/examples/BARC-SS_HUC8_11110203_a0.4.ipynb
-jupyter notebook BARC-SS_HUC8_11110203_a0.4.ipynb
-```
-
-Run it from an empty folder: FIMserv creates `code/`, `data/`, and `output/` folders
-where it runs. The notebook produces:
-
-| Output | Where |
-|--------|-------|
-| Adjusted hydrotables | `output/flood_11110203/11110203/branches/*/hydroTable_*.csv` and `output/flood_11110203/11110203/hydrotable.csv` |
-| Original (unadjusted) files | `output/flood_11110203/barcss_original/` |
-| Flood map (GeoTIFF, EPSG:5070, 1 = flooded) | `output/flood_11110203/11110203_inundation/` |
-| Flood map figure | `flood_map_11110203_BARC-SS_a0.4.png` |
-
-## Use it for any HUC8, method, or channel shape
 
 ```python
 import fimserve as fm
-import barcss
 
 huc = "11110203"
-fm.DownloadHUC8(huc, version="4.5")                        # OWP HAND-FIM outputs into ./output
-
-ids = barcss.feature_ids("output", huc)                     # reaches in the rating curves
-geometry = barcss.bankfull_geometry(ids, shape="a", a=0.4)  # channel geometry for the chosen shape
-barcss.apply("output", huc, geometry, method="BARC-SS")     # or method="BARC"
-
+fm.DownloadHUC8(huc, version="4.5")
+fm.BathymetricAdjustment(huc, method="BARC-SS", shape="a", value=0.4)   # or method="BARC"
 fm.getNWMretrospectivedata(huc, "2015-12-26", "2016-01-05", value_times=["2016-01-03 00:00:00"])
 fm.runOWPHANDFIM(huc)
-barcss.plot.flood_map("output", huc)
 ```
 
-**Method:** `"BARC"` or `"BARC-SS"`.
+**Example notebook:** [`examples/BARC-SS_HUC8_11110203_a0.4.ipynb`](examples/BARC-SS_HUC8_11110203_a0.4.ipynb)
+runs this for HUC8 11110203 (Arkansas River), a trapezoidal channel with a = 0.4, and the
+flood of 3 January 2016, then plots a rating curve before and after and maps the flooded
+area. Run it from an empty folder.
 
-**Channel shape** (passed to HydroGeomKit):
+| Setting | Options |
+|---------|---------|
+| `method` | `"BARC"` or `"BARC-SS"` |
+| `shape="a"` | trapezoid, `value` = bottom width / top width (0 triangle, 1 rectangle) |
+| `shape="r"` | Dingman's r, `value` = r (1 triangle, 2 parabola, larger toward rectangle) |
+| `shape="z"` | side slope, `value` = z (z:1) |
 
-| Shape | Parameter | Range |
-|-------|-----------|-------|
-| `shape="a"` | trapezoid, bottom width / top width | `a=0` triangle to `a=1` rectangle |
-| `shape="r"` | Dingman's shape parameter | `r=1` triangle, `r=2` parabola, larger `r` toward rectangle |
-| `shape="z"` | side slope z:1 | `z=0` rectangle |
+The original hydrotables are saved in `output/flood_<huc>/original_hydrotables/` the first
+time, and every run starts from them. `fm.RestoreHydrotable(huc)` puts them back, and
+`fm.plotBathymetricSRC(huc)` compares a reach's rating curve before and after.
 
-**Running again with other settings.** `apply` saves the original HAND-FIM files the first
-time and always starts from them, so you can rerun with another method or shape without
-downloading again. FIMserv skips a run if a flood map for the same discharge already
-exists, so keep the previous map under its own name first:
+## Use the code on its own
+
+[`barc_ss.py`](barc_ss.py) is the whole method in one file. It works on any HUC8 folder
+downloaded with FIMserv:
 
 ```python
-barcss.keep_flood_map("output", huc, "BARC-SS_a0.4")
-geometry = barcss.bankfull_geometry(ids, shape="a", a=1.0)
-barcss.apply("output", huc, geometry, method="BARC")
-fm.runOWPHANDFIM(huc)
+import barc_ss
+
+flood_dir = "output/flood_11110203"
+ids = barc_ss.feature_ids(flood_dir, "11110203")
+geometry = barc_ss.channel_geometry(ids, shape="a", value=0.4)
+barc_ss.apply_barc(flood_dir, "11110203", geometry, method="BARC-SS")
 ```
 
-To map the original HAND-FIM for comparison, run `barcss.restore("output", huc)` and then
-`fm.runOWPHANDFIM(huc)`.
+It needs `pandas`, `numpy`, `matplotlib`, and HydroGeomKit
+(`pip install "git+https://github.com/Reizrb/HydroGeom"`).
 
-## Functions
+## What it changes
 
-| Function | What it does |
-|----------|--------------|
-| `feature_ids(output_dir, huc8)` | NWM feature IDs (NHDPlusV2.1 COMIDs) in the HUC8's rating curves |
-| `bankfull_geometry(comids, shape, **param)` | Bankfull and mean-flow width and depth from HydroGeom, plus bankfull area and wetted perimeter for the shape |
-| `apply(output_dir, huc8, geometry, method)` | Apply BARC or BARC-SS to every branch of the HUC8 |
-| `restore(output_dir, huc8)` | Put back the original HAND-FIM files |
-| `keep_flood_map(output_dir, huc8, label)` | Rename the latest flood map so FIM can run again |
-| `plot.rating_curve(output_dir, huc8, hydroid)` | Original and adjusted rating curve of one reach |
-| `plot.flood_map(output_dir, huc8)` | Map of the flooded cells with the HUC8 boundary |
-
-## What the code does
-
-For each reach, with bankfull area A<sub>bnk</sub> and wetted perimeter P<sub>bnk</sub>
-from the chosen shape, reach length L (km), and the hydrotable's Manning's n and slope S
-(both unchanged):
+For every stage of each reach's hydrotable, with bankfull area A<sub>bnk</sub> and
+wetted perimeter P<sub>bnk</sub> for the chosen shape and reach length L (km):
 
 | | |
 |---|---|
@@ -123,33 +83,14 @@ from the chosen shape, reach length L (km), and the hydrotable's Manning's n and
 | Wetted perimeter P += P<sub>bnk</sub> | (3) |
 | Wet area A += A<sub>bnk</sub> | (4) |
 | R = A / P | (5) |
-| Q = (1/n) × A × R<sup>2/3</sup> × S<sup>1/2</sup> | (6) |
-| BARC-SS only: stage += mean-flow depth d<sub>mf</sub> | (7) |
+| Q = (1/n) × A × R<sup>2/3</sup> × S<sup>1/2</sup>, with n and S unchanged | (6) |
+| BARC-SS only: stage += mean-flow depth | (7) |
 
-Both methods then add a zero-flow point (stage = 0, discharge = 0) at the start of each
-rating curve. The HAND raster is not changed.
-
-- Reaches without a geometry prediction are left unadjusted.
-- The subdivision columns (`subdiv_applied`, `overbank_n`, `channel_n`,
-  `subdiv_discharge_cms`) are removed from the hydroTable, as in the OWP bathymetry
-  adjustment, and the original discharge is kept as `discharge_cms_org`.
-
-## Tests
-
-```bash
-git clone https://github.com/Reizrb/Bathymetric-Adjustment-of-Rating-Curves-and-Stage-Shift-BARC-SS
-cd Bathymetric-Adjustment-of-Rating-Curves-and-Stage-Shift-BARC-SS
-pip install -e ".[test]"
-python -m pytest tests
-```
-
-The tests run on a small built-in HUC8 (no downloads). They check Equations 1 to 7, that
-BARC and BARC-SS differ only by the stage shift, that reruns and `restore` work, and that
-the results match the original research code (`tests/reference/original_utils.py`).
+Both methods then add a point at stage = 0, discharge = 0 at the start of each rating
+curve. The HAND raster is not changed, reaches without a geometry prediction are left
+as they are, and the original discharge is kept in `discharge_cms_org`.
 
 ## Citation
-
-If you use this code, please cite:
 
 - Zarrabi, R., Cohen, S., Pruitt, C., Baruah, A., McDermott, R., & Chen, Y. (2026).
   Sensitivity of terrain-based flood inundation model (OWP HAND-FIM) predictions to
@@ -159,14 +100,6 @@ If you use this code, please cite:
   mean-flow channel geometry estimation through machine learning algorithms across
   the CONtiguous United States (CONUS). *Water Resources Research*, 61(2).
   https://doi.org/10.1029/2024WR037997
-
-## Related repositories
-
-| Repository | What it does |
-|------------|--------------|
-| [HydroGeom](https://github.com/Reizrb/HydroGeom) | Channel geometry for every NHDPlusV2.1 reach: web page, API, and Python package |
-| [FIMserv](https://github.com/sdmlua/FIMserv) | Downloads and runs OWP HAND-FIM for any HUC8 |
-| [OWP inundation-mapping](https://github.com/NOAA-OWP/inundation-mapping) | OWP HAND-FIM, including its bathymetric adjustment module |
 
 ## License
 
