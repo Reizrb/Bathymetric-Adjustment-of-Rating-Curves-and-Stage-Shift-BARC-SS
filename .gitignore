@@ -1,0 +1,13 @@
+__pycache__/
+*.pyc
+*.egg-info/
+build/
+dist/
+.pytest_cache/
+.ipynb_checkpoints/
+.DS_Store
+# FIMserv working folders created when running the example
+examples/code/
+examples/data/
+examples/output/
+examples/*.png

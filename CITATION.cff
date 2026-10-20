@@ -1,0 +1,36 @@
+cff-version: 1.2.0
+message: "If you use this software, please cite the article below."
+title: "BARC-SS: Bathymetric Adjustment of Rating Curves and Stage Shift"
+type: software
+authors:
+  - family-names: Zarrabi
+    given-names: Reihaneh
+    affiliation: "University of Alabama"
+license: MIT
+version: "1.0.0"
+repository-code: "https://github.com/Reizrb/Bathymetric-Adjustment-of-Rating-Curves-and-Stage-Shift-BARC-SS"
+abstract: "Python implementation of BARC and BARC-SS, which add ML-predicted bankfull channel geometry to OWP HAND-FIM synthetic rating curves and, for BARC-SS, shift the stage datum by the mean-flow depth."
+keywords:
+  - "flood inundation mapping"
+  - "HAND"
+  - "synthetic rating curve"
+  - "bathymetry"
+  - "channel geometry"
+preferred-citation:
+  type: article
+  title: "Sensitivity of terrain-based flood inundation model (OWP HAND-FIM) predictions to channel geometry: Insights from bathymetric adjustments of rating curves and stage shift"
+  authors:
+    - family-names: Zarrabi
+      given-names: Reihaneh
+    - family-names: Cohen
+      given-names: Sagy
+    - family-names: Pruitt
+      given-names: C.
+    - family-names: Baruah
+      given-names: Anupal
+    - family-names: McDermott
+      given-names: R.
+    - family-names: Chen
+      given-names: Yixian
+  journal: "Journal of Hydrology"
+  year: 2026
