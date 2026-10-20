@@ -17,31 +17,42 @@ for a channel shape you choose.
 <p align="center"><img src="assets/fig4b_step2-3_barc.png" alt="BARC" width="75%"><br><sub>BARC: the missing channel geometry is added and discharge recomputed.</sub></p>
 <p align="center"><img src="assets/fig4c_step4-5_barc-ss.png" alt="BARC-SS" width="75%"><br><sub>BARC-SS: stage is also shifted by the mean-flow depth and anchored at zero flow.</sub></p>
 
-## Run it with FIMserv_BARC-SS
+## Run the example
 
-[FIMserv_BARC-SS](https://github.com/Reizrb/FIMserv_BARC-SS) is a fork of
-[FIMserv](https://github.com/sdmlua/FIMserv), which downloads and runs OWP HAND-FIM for
-any HUC8, with BARC and BARC-SS added as one extra step. Everything else works the same
-as FIMserv. (A pull request to add this step to FIMserv is open.)
+The method is one file, [`barc_ss.py`](barc_ss.py). It adjusts the hydrotables of a HUC8
+downloaded with [FIMserv](https://github.com/sdmlua/FIMserv), which also runs HAND-FIM.
 
 ```bash
-pip install "git+https://github.com/Reizrb/FIMserv_BARC-SS" "git+https://github.com/Reizrb/HydroGeom"
+git clone https://github.com/Reizrb/Bathymetric-Adjustment-of-Rating-Curves-and-Stage-Shift-BARC-SS
+cd Bathymetric-Adjustment-of-Rating-Curves-and-Stage-Shift-BARC-SS
+pip install fimserve "git+https://github.com/Reizrb/HydroGeom" jupyter
+jupyter notebook examples/BARC-SS_HUC8_11110203_a0.4.ipynb
 ```
+
+The notebook runs **HUC8 11110203** (Arkansas River) with a **trapezoidal channel,
+a = 0.4**, and the flood of **3 January 2016, 00:00** (NWM retrospective discharge, OWP
+HAND-FIM 4.5). It downloads the HUC8, applies BARC-SS, plots a rating curve before and
+after, runs HAND-FIM, and maps the flooded area.
+
+## Use it on any HUC8
 
 ```python
 import fimserve as fm
+import barc_ss
 
 huc = "11110203"
-fm.DownloadHUC8(huc, version="4.5")
-fm.BathymetricAdjustment(huc, method="BARC-SS", shape="a", value=0.4)   # or method="BARC"
-fm.getNWMretrospectivedata(huc, "2015-12-26", "2016-01-05", value_times=["2016-01-03 00:00:00"])
-fm.runOWPHANDFIM(huc)
-```
+flood_dir = f"output/flood_{huc}"
 
-**Example notebook:** [`examples/BARC-SS_HUC8_11110203_a0.4.ipynb`](examples/BARC-SS_HUC8_11110203_a0.4.ipynb)
-runs this for HUC8 11110203 (Arkansas River), a trapezoidal channel with a = 0.4, and the
-flood of 3 January 2016, then plots a rating curve before and after and maps the flooded
-area. Run it from an empty folder.
+fm.DownloadHUC8(huc, version="4.5")                                   # 1. download HAND-FIM
+
+ids = barc_ss.feature_ids(flood_dir, huc)                             # 2. reaches in the HUC8
+geometry = barc_ss.channel_geometry(ids, shape="a", value=0.4)        # 3. channel geometry
+barc_ss.apply_barc(flood_dir, huc, geometry, method="BARC-SS")       # 4. adjust hydrotables
+
+fm.getNWMretrospectivedata(huc, "2015-12-26", "2016-01-05",
+                           value_times=["2016-01-03 00:00:00"])      # 5. discharge
+fm.runOWPHANDFIM(huc)                                                 # 6. flood map
+```
 
 | Setting | Options |
 |---------|---------|
@@ -50,26 +61,16 @@ area. Run it from an empty folder.
 | `shape="r"` | Dingman's r, `value` = r (1 triangle, 2 parabola, larger toward rectangle) |
 | `shape="z"` | side slope, `value` = z (z:1) |
 
+| Function in `barc_ss.py` | What it does |
+|--------------------------|--------------|
+| `feature_ids(flood_dir, huc)` | NWM reach IDs in the HUC8's rating curves |
+| `channel_geometry(ids, shape, value)` | Bankfull geometry from HydroGeom, with area and wetted perimeter for the shape |
+| `apply_barc(flood_dir, huc, geometry, method)` | Apply BARC or BARC-SS to every hydrotable of the HUC8 |
+| `restore_hydrotables(flood_dir)` | Put back the original hydrotables |
+| `plot_rating_curve(flood_dir, huc, hydroid)` | Original vs adjusted rating curve of one reach |
+
 The original hydrotables are saved in `output/flood_<huc>/original_hydrotables/` the first
-time, and every run starts from them. `fm.RestoreHydrotable(huc)` puts them back, and
-`fm.plotBathymetricSRC(huc)` compares a reach's rating curve before and after.
-
-## Use the code on its own
-
-[`barc_ss.py`](barc_ss.py) is the whole method in one file. It works on any HUC8 folder
-downloaded with FIMserv:
-
-```python
-import barc_ss
-
-flood_dir = "output/flood_11110203"
-ids = barc_ss.feature_ids(flood_dir, "11110203")
-geometry = barc_ss.channel_geometry(ids, shape="a", value=0.4)
-barc_ss.apply_barc(flood_dir, "11110203", geometry, method="BARC-SS")
-```
-
-It needs `pandas`, `numpy`, `matplotlib`, and HydroGeomKit
-(`pip install "git+https://github.com/Reizrb/HydroGeom"`).
+time, and every run starts from them, so you can rerun with another method or shape.
 
 ## What it changes
 
