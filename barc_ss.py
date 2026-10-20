@@ -15,7 +15,8 @@ Use on any HUC8 downloaded with FIMserv (https://github.com/sdmlua/FIMserv):
     barc_ss.apply_barc(flood_dir, "11110203", geometry, method="BARC-SS")
 
 Requires pandas, numpy, matplotlib, and HydroGeomKit
-(pip install "git+https://github.com/Reizrb/HydroGeom").
+(pip install "git+https://github.com/Reizrb/HydroGeom"); the flood map also needs
+rasterio, geopandas, and contextily.
 """
 
 import os
@@ -247,15 +248,21 @@ def restore_hydrotables(flood_dir):
     print("Original hydrotables restored.")
 
 
-def plot_rating_curve(flood_dir, huc, hydroid=None, label="Adjusted"):
-    """Original vs adjusted rating curve of one reach (default: deepest mean-flow depth)."""
+def plot_rating_curve(
+    flood_dir, huc, hydroid, label="BARC-SS", discharge_csv=None, ax=None
+):
+    """Original (NO_BARC) and adjusted rating curve of one reach.
+
+    discharge_csv: a FIMserv discharge file (feature_id, discharge); if given, the
+    reach's flood discharge is drawn as a dotted vertical line.
+    """
     import matplotlib.pyplot as plt
 
     ht = pd.read_csv(os.path.join(flood_dir, str(huc), "hydrotable.csv"))
-    if hydroid is None:
-        hydroid = ht.loc[ht["shift_datum_m"].idxmax(), "HydroID"]
     new = ht[ht["HydroID"] == hydroid]
-    b = str(new["branch_id"].iloc[0])
+    if new.empty:
+        raise ValueError(f"HydroID {hydroid} is not in HUC8 {huc}.")
+    b, fid = str(new["branch_id"].iloc[0]), int(new["feature_id"].iloc[0])
     org = pd.read_csv(
         os.path.join(
             flood_dir,
@@ -267,20 +274,165 @@ def plot_rating_curve(flood_dir, huc, hydroid=None, label="Adjusted"):
         )
     )
     org = org[org["HydroID"] == hydroid]
-    _, ax = plt.subplots(figsize=(6, 4.5))
-    ax.plot(
-        org["discharge_cms"],
-        org["stage"],
-        color="#c0504d",
-        lw=2,
-        label="Original HAND-FIM",
+
+    if ax is None:
+        _, ax = plt.subplots(figsize=(7, 6))
+    ax.set_facecolor("#f7f7f7")
+    ax.plot(org["discharge_cms"], org["stage"], color="black", lw=1.8, label="NO_BARC")
+    ax.plot(new["discharge_cms"], new["stage"], color="#3a86ff", lw=2.2, label=label)
+    if discharge_csv:
+        q = pd.read_csv(discharge_csv)
+        q = q.loc[q["feature_id"].astype(int) == fid, "discharge"]
+        if len(q):
+            ax.axvline(
+                float(q.iloc[0]), color="black", ls=":", lw=2, label="Flood Discharge"
+            )
+    ax.set_xlabel("Discharge (cms)", fontsize=14)
+    ax.set_ylabel("Stage (m)", fontsize=14)
+    ax.set_title(
+        f"Synthetic Rating Curve for HydroID={int(hydroid)}\nin HUC8={huc}",
+        fontsize=15,
+        fontweight="bold",
     )
-    ax.plot(new["discharge_cms"], new["stage"], color="#2f6f9f", lw=2, label=label)
-    ax.set(
-        xlabel="Discharge (m³/s)",
-        ylabel="Stage (m)",
-        title=f"Rating curve, HydroID {int(hydroid)}",
-    )
-    ax.grid(alpha=0.3)
-    ax.legend()
+    ax.ticklabel_format(axis="x", style="sci", scilimits=(0, 0), useMathText=True)
+    ax.tick_params(labelsize=12)
+    ax.set_xlim(left=0)
+    ax.set_ylim(bottom=0)
+    ax.grid(color="0.85", lw=0.8)
+    ax.legend(loc="lower right", frameon=False, fontsize=12)
     return ax
+
+
+def _read_flooded(path, max_px=2500):
+    """Flooded cells (value > 0) of a FIM raster, reduced to at most max_px wide.
+    A coarse cell counts as flooded if any cell inside it is, so narrow rivers stay visible."""
+    import rasterio
+    from rasterio.windows import Window
+
+    with rasterio.open(path) as r:
+        s = max(1, -(-max(r.width, r.height) // max_px))
+        h, w = r.height // s, r.width // s
+        wet = np.zeros((h, w), bool)
+        step = 256 * s
+        for row in range(0, h * s, step):
+            n = min(step, h * s - row)
+            blk = r.read(1, window=Window(0, row, w * s, n)) > 0
+            wet[row // s : (row + n) // s] = blk.reshape(n // s, s, w, s).any(
+                axis=(1, 3)
+            )
+        b = r.bounds
+        extent = (b.left, b.left + w * s * r.res[0], b.top - h * s * r.res[1], b.top)
+        return wet, extent, r.crs
+
+
+BASEMAPS = {
+    "A": "Esri.WorldImagery",  # satellite
+    "B": "Esri.WorldTopoMap",  # topographic
+    "C": "CartoDB.Positron",  # light gray
+    "D": "CartoDB.Voyager",  # soft street map
+    "E": "USGS.USImageryTopo",  # USGS satellite with topo labels
+    "F": "Esri.WorldShadedRelief",  # terrain hillshade
+}
+
+
+def plot_flood_map(
+    fim_tif,
+    boundary_file,
+    huc=None,
+    basemap="Esri.WorldImagery",
+    color="#00a8ff",
+    alpha=0.35,
+    title=None,
+    ax=None,
+):
+    """Flooded area (semi-transparent) and HUC8 boundary on a web basemap (needs contextily).
+
+    boundary_file: the HUC8 polygon, e.g. output/flood_<huc>/<huc>/wbd.gpkg from FIMserv
+    (not wbd8_clp.gpkg, which is the buffered processing extent).
+    """
+    import contextily as ctx
+    import geopandas as gpd
+    import matplotlib.pyplot as plt
+    import xyzservices.providers as xyz
+    from matplotlib.colors import to_rgba
+    from matplotlib.lines import Line2D
+    from matplotlib.patches import Patch
+
+    wet, extent, crs = _read_flooded(fim_tif)
+    rgba = np.zeros(wet.shape + (4,))
+    rgba[wet] = to_rgba(color, alpha)
+    boundary = gpd.read_file(boundary_file)
+    if huc is not None:  # keep only this HUC8 if the file holds several
+        for col in ("HUC8", "huc8"):
+            if col in boundary.columns:
+                boundary = boundary[boundary[col].astype(str) == str(huc)]
+    boundary = boundary.dissolve().to_crs(crs)
+    line = "white" if "Imagery" in basemap else "black"
+
+    if ax is None:
+        _, ax = plt.subplots(figsize=(10, 9))
+    ax.imshow(rgba, extent=extent, interpolation="nearest", zorder=3)
+    boundary.boundary.plot(ax=ax, color=line, lw=1.6, zorder=4)
+    x0, y0, x1, y1 = boundary.total_bounds
+    pad = 0.03 * max(x1 - x0, y1 - y0)
+    ax.set_xlim(x0 - pad, x1 + pad)
+    ax.set_ylim(y0 - pad, y1 + pad)
+    ctx.add_basemap(
+        ax, crs=crs, source=xyz.query_name(basemap), attribution_size=6, zorder=0
+    )
+    ax.legend(
+        handles=[
+            Patch(
+                facecolor=to_rgba(color, alpha), edgecolor=color, label="Flooded area"
+            ),
+            Line2D([], [], color=line, lw=1.6, label="HUC8 boundary"),
+        ],
+        loc="lower left",
+        fontsize=11,
+        framealpha=0.85,
+    )
+    if title:
+        ax.set_title(title, fontsize=14, fontweight="bold")
+    ax.set_axis_off()
+    return ax
+
+
+class quiet:
+    """Hide all printed output, including from tools FIMserv runs in the background
+    (for example the AWS download progress). Errors are still raised."""
+
+    def __enter__(self):
+        import contextlib
+        import logging
+        import sys
+        import warnings
+
+        self._stack = contextlib.ExitStack()
+        devnull = self._stack.enter_context(open(os.devnull, "w"))
+        for stream in (sys.stdout, sys.stderr):
+            with contextlib.suppress(AttributeError, ValueError, OSError):
+                stream.flush()
+        self._saved = []
+        for fd in (1, 2):
+            try:
+                self._saved.append((fd, os.dup(fd)))
+                os.dup2(devnull.fileno(), fd)
+            except OSError:
+                pass
+        self._stack.enter_context(contextlib.redirect_stdout(devnull))
+        self._stack.enter_context(contextlib.redirect_stderr(devnull))
+        self._stack.enter_context(warnings.catch_warnings())
+        warnings.simplefilter("ignore")
+        self._log = logging.root.manager.disable
+        logging.disable(logging.CRITICAL)
+        return self
+
+    def __exit__(self, *exc):
+        import logging
+
+        logging.disable(self._log)
+        for fd, saved in self._saved:
+            os.dup2(saved, fd)
+            os.close(saved)
+        self._stack.close()
+        return False

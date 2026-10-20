@@ -25,7 +25,7 @@ downloaded with [FIMserv](https://github.com/sdmlua/FIMserv), which also runs HA
 ```bash
 git clone https://github.com/Reizrb/Bathymetric-Adjustment-of-Rating-Curves-and-Stage-Shift-BARC-SS
 cd Bathymetric-Adjustment-of-Rating-Curves-and-Stage-Shift-BARC-SS
-pip install fimserve "git+https://github.com/Reizrb/HydroGeom" jupyter
+pip install fimserve "git+https://github.com/Reizrb/HydroGeom" contextily jupyter
 jupyter notebook examples/BARC-SS_HUC8_11110203_a0.4.ipynb
 ```
 
@@ -69,7 +69,9 @@ fm.runOWPHANDFIM(huc)                                                 # 6. flood
 | `channel_geometry(ids, shape, value)` | Bankfull geometry from HydroGeom, with area and wetted perimeter for the shape |
 | `apply_barc(flood_dir, huc, geometry, method)` | Apply BARC or BARC-SS to every hydrotable of the HUC8 |
 | `restore_hydrotables(flood_dir)` | Put back the original hydrotables |
-| `plot_rating_curve(flood_dir, huc, hydroid)` | Original vs adjusted rating curve of one reach |
+| `plot_rating_curve(flood_dir, huc, hydroid, discharge_csv=...)` | Original vs adjusted rating curve of one reach, with the flood discharge |
+| `plot_flood_map(fim_tif, boundary_file, basemap)` | Flooded area and HUC8 boundary on a basemap (`BASEMAPS` lists six) |
+| `quiet()` | Hide FIMserv's download and log messages (`with barc_ss.quiet(): ...`) |
 
 The original hydrotables are saved in `output/flood_<huc>/original_hydrotables/` the first
 time, and every run starts from them, so you can rerun with another method or shape.
