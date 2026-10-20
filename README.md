@@ -34,6 +34,8 @@ a = 0.4**, and the flood of **3 January 2016, 00:00** (NWM retrospective dischar
 HAND-FIM 4.5). It downloads the HUC8, applies BARC-SS, plots a rating curve before and
 after, runs HAND-FIM, and maps the flooded area.
 
+<p align="center"><img src="assets/example_flood_map.png" alt="BARC-SS flood map, HUC8 11110203, a = 0.4, 3 January 2016" width="75%"><br><sub>Result of the example: BARC-SS flood map for HUC8 11110203, a = 0.4, 3 January 2016.</sub></p>
+
 ## Use it on any HUC8
 
 ```python
