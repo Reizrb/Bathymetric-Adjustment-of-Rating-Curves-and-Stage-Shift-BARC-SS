@@ -1,5 +1,7 @@
 # BARC-SS: Bathymetric Adjustment of Rating Curves and Stage Shift
 
+[![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.23520164.svg)](https://doi.org/10.5281/zenodo.23520164)
+
 DEMs capture the water surface, not the river bed, so the synthetic rating curves of
 [OWP HAND-FIM](https://github.com/NOAA-OWP/inundation-mapping) miss the channel below
 the water. This code adds that channel to the HAND-FIM hydrotables before the flood map
