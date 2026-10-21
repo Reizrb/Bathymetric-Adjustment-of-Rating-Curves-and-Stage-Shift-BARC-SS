@@ -118,3 +118,13 @@ as they are, and the original discharge is kept in `discharge_cms_org`.
 ## License
 
 [MIT](LICENSE)
+
+## Related repositories
+
+| Repository | What it does |
+|------------|--------------|
+| [Bankfull-and-mean-flow-channel-geometry-for-CONUS](https://github.com/Reizrb/Bankfull-and-mean-flow-channel-geometry-for-CONUS) | ML models and the CONUS bankfull and mean-flow channel geometry dataset |
+| [HydroGeom](https://github.com/Reizrb/HydroGeom) | Web page, API, and Python package to get and use the channel geometry |
+| [Bathymetric-Adjustment-of-Rating-Curves-and-Stage-Shift-BARC-SS](https://github.com/Reizrb/Bathymetric-Adjustment-of-Rating-Curves-and-Stage-Shift-BARC-SS) | Adds the channel geometry to OWP HAND-FIM rating curves for flood mapping (BARC, BARC-SS) (this repository) |
+| [TRoute-Channel-Geometry](https://github.com/Reizrb/TRoute-Channel-Geometry) | Adds the channel geometry to the NWM RouteLink file for T-Route routing |
+| [FIMserv](https://github.com/sdmlua/FIMserv) | Downloads and runs OWP HAND-FIM for any HUC8 |
